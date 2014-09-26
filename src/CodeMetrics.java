@@ -3,215 +3,107 @@
 // -e PATH1_TO_EXCLUDE;PATH2_TO_EXCLUDE
 // TODO: Support for defining components/modules
 // -m module1=PATH1;PATH2 module2=PATH3
-// TODO: Support for Java, C#, C++, XML
-// TODO: Output to .csv file
+// TODO: Support for (Java done?), C#, C++, XML
+// TODO: Create interface so we can handle different type of files mentioned above
 
-import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileWriter;
+
 
 public class CodeMetrics {
-  private boolean calculateCodeChurn = false;
-  private SourceFiles oldFiles = null;
-  private SourceFiles newFiles = null;
-  private File oldFile = null;
-  private File newFile = null;
-  
-  static private String usage =
-    "Usage: CodeMetrics file [-options]\n" +
-    "  (to calculate metrics for a single source file)\n" +
-    "or  CodeMetrics path [-options]\n" +
-    "  (to traverse a directory and calculate metrics for all source files)\n" +
-    "or  CodeMetrics oldfile newfile [-options]\n" +
-    "  (to calculate metrics including code churn)\n" +
-    "\n" +
-    "where options include:\n" +
-    "  -ignoremove   Igmore moved code. Default behaviour is to count moved code as changed.\n" +
-    "  -verbose      Output more detailed metrics\n";
+    private boolean calculateCodeChurn = false;
+    private SourceFiles oldFiles = null;
+    private SourceFiles newFiles = null;
+    private File oldFile = null;
+    private File newFile = null;
 
-  CodeMetrics() {
-    oldFiles = new SourceFiles();
-    newFiles = new SourceFiles();
-  }
+    static private String usage =
+            "Usage: CodeMetrics file [-options]\n" +
+                    "  (to calculate metrics for a single source file)\n" +
+                    "or  CodeMetrics path [-options]\n" +
+                    "  (to traverse a directory and calculate metrics for all source files)\n" +
+                    "or  CodeMetrics oldfile newfile [-options]\n" +
+                    "  (to calculate metrics including code churn)\n" +
+                    "\n" +
+                    "where options include:\n" +
+                    "  -ignoremove   Igmore moved code. Default behaviour is to count moved code as changed.\n" +
+                    "  -verbose      Output more detailed metrics\n";
 
-  public static void main(final String[] args) {
-    CodeMetrics codeMetrics = new CodeMetrics();
-
-    codeMetrics.parseCommandLine(args);
-
-    // Calculate Code Churn
-    if (codeMetrics.calculateCodeChurn) {
-      codeMetrics.countChurn(codeMetrics.oldFiles, codeMetrics.newFiles);
+    CodeMetrics() {
+        oldFiles = new SourceFiles();
+        newFiles = new SourceFiles();
     }
 
-    // Calculate Cyclomatic Complexity
-    codeMetrics.countComplexity(codeMetrics.newFiles);
+    public static void main(final String[] args) {
+        CodeMetrics codeMetrics = new CodeMetrics();
 
-    // Count LOC (Lines of Code)
-    codeMetrics.countLines(codeMetrics.newFiles);
+        codeMetrics.parseCommandLine(args);
 
-    codeMetrics.printReport();
-    codeMetrics.writeReport();
-  }
+        // Calculate Code Churn
+        if (codeMetrics.calculateCodeChurn) {
+            DiffDir d = new DiffDir();
+            d.diffDirsAndCountCodeChurn(codeMetrics.oldFiles, codeMetrics.newFiles);
 
-  private void writeReport() {
-    BufferedWriter out = null;
-    try {
-      FileWriter fstream = new FileWriter("out.csv");
-      out = new BufferedWriter(fstream);
-      out.write("File Name;");
-      out.write("Total Lines of Code;"); 
-      out.write("Executable Lines;");
-      out.write("Lines of Comments;"); 
-      out.write("Trivial Lines;"); 
-      out.write("Empty Lines;"); 
-      out.write("Code Complexity;");
-      out.write("Number of Methods;");
-      out.write("Average Method Complexity;");
-      out.write("Comment Percentage;");
-      if (calculateCodeChurn) {
-        out.write("Added Lines of Code;");
-        out.write("Changed Lines of Code;");
-        out.write("Deleted Lines of Code;");
-        out.write("Code Churn;");
-      }
-      out.write(System.getProperty("line.separator"));
-      
-      for (int i = 0; i < newFiles.getNrOfFiles(); i++) {
-        out.write(newFiles.getSrcFile(i).getFilePath() + ";"); 
-        out.write(String.valueOf(newFiles.getSrcFile(i).getLinesOfCode()) + ";"); 
-        out.write(String.valueOf(newFiles.getSrcFile(i).getLinesOfStatements()) + ";");
-        out.write(String.valueOf(newFiles.getSrcFile(i).getLinesOfComments()) + ";"); 
-        out.write(String.valueOf(newFiles.getSrcFile(i).getTrivialLines()) + ";");
-        out.write(String.valueOf(newFiles.getSrcFile(i).getEmptyLines()) + ";");
-        out.write(String.valueOf(newFiles.getSrcFile(i).getComplexity()) + ";");
-        out.write(String.valueOf(newFiles.getSrcFile(i).getNrOfMethods()) + ";");
-        out.write(String.valueOf(newFiles.getSrcFile(i).getAvgComplexity()) + ";");
-        out.write(String.valueOf((100 * newFiles.getSrcFile(i).getLinesOfComments()) / newFiles.getSrcFile(i).getLinesOfCode() + "%") + ";");
-        if (calculateCodeChurn) {
-          out.write(String.valueOf(newFiles.getSrcFile(i).getAddedLines()) + ";");
-          out.write(String.valueOf(newFiles.getSrcFile(i).getChangedLines()) + ";");
-          out.write(String.valueOf(newFiles.getSrcFile(i).getDeletedLines()) + ";");
-          out.write(String.valueOf(newFiles.getSrcFile(i).getCodeChurn()) + ";");
         }
-        out.write(System.getProperty("line.separator"));
-      }
-      
-      //Close the output stream
-      out.close();
-    }
-    catch (Exception e) {
-      System.err.println("Error: " + e.getMessage());
-      return;
-    }
-  }
 
-  private void printReport() {
-    for (int i = 0; i < newFiles.getNrOfFiles(); i++) {
-      System.out.println(newFiles.getSrcFile(i).getFilePath());
-      System.out.println("\t Total Lines of Code:       " + newFiles.getSrcFile(i).getLinesOfCode()); 
-      System.out.println("\t Executable Lines:          " + newFiles.getSrcFile(i).getLinesOfStatements());
-      System.out.println("\t Lines of Comments:         " + newFiles.getSrcFile(i).getLinesOfComments()); 
-      System.out.println("\t Trivial Lines:             " + newFiles.getSrcFile(i).getTrivialLines()); 
-      System.out.println("\t Empty Lines:               " + newFiles.getSrcFile(i).getEmptyLines()); 
-      System.out.println("\t Code Complexity:           " + newFiles.getSrcFile(i).getComplexity());
-      System.out.println("\t Number of Methods:         " + newFiles.getSrcFile(i).getNrOfMethods());
-      System.out.println("\t Average Method Complexity: " + newFiles.getSrcFile(i).getAvgComplexity());
-      System.out.println("\t Comment Percentage:        " + (100 * newFiles.getSrcFile(i).getLinesOfComments()) / newFiles.getSrcFile(i).getLinesOfCode() + "%");
-      // Recommendations: Code where the percentage of comment is lower than 20% should be more commented. 
-      // However overly commented code (>40%) is more difficult to read.
-      if (calculateCodeChurn) {
-        System.out.println("\t Added Lines of Code:       " + newFiles.getSrcFile(i).getAddedLines());
-        System.out.println("\t Changed Lines of Code:     " + newFiles.getSrcFile(i).getChangedLines());
-        System.out.println("\t Deleted Lines of Code:     " + newFiles.getSrcFile(i).getDeletedLines());
-        System.out.println("\t Code Churn:                " + newFiles.getSrcFile(i).getCodeChurn());
-      }
-    }
-    System.out.println("Total (Aggregated Metrics)");
-    System.out.println("\t Total Lines of Code:     " + newFiles.getLinesOfCode()); 
-    System.out.println("\t Executable Lines:        " + newFiles.getLinesOfStatements());
-    System.out.println("\t Lines of Comments:       " + newFiles.getLinesOfComments()); 
-    System.out.println("\t Trivial Lines:           " + newFiles.getTrivialLines()); 
-    System.out.println("\t Empty Lines:             " + newFiles.getEmptyLines()); 
-    System.out.println("\t Code Complexity:         " + newFiles.getComplexity());
-    System.out.println("\t Number of Files:         " + newFiles.getNrOfFiles());
-    System.out.println("\t Average File Complexity: " + newFiles.getAvgComplexity());
-    System.out.println("\t Comment Percentage:      " + (100 * newFiles.getLinesOfComments()) / newFiles.getLinesOfCode() + "%");
-    // Recommendations: Code where the percentage of comment is lower than 20% should be more commented. 
-    // However overly commented code (>40%) is more difficult to read.  
-    if (calculateCodeChurn) {
-      System.out.println("\t Added Lines of Code:     " + newFiles.getAddedLines());
-      System.out.println("\t Changed Lines of Code:   " + newFiles.getChangedLines());
-      System.out.println("\t Deleted Lines of Code:   " + newFiles.getDeletedLines());
-      System.out.println("\t Code Churn:              " + newFiles.getCodeChurn());
-    }
-  }
+        // Calculate Cyclomatic Complexity
+        System.out.println("complex");
+        codeMetrics.newFiles.countComplexity();
+        System.out.println("lines");
+        // Count LOC (Lines of Code)
+        codeMetrics.newFiles.countLines();
 
-  private void parseCommandLine(final String[] args) {
-    // Check if we have a parameter
-    if (args.length == 0) {  
-      System.out.println(usage);
-      System.exit(1);
-    }
-    // One parameter (Run Code Metrics without Code Churn)
-    else if (args.length == 1) {
-      newFile = new File(args[0]);
+        Reporting r = new Reporting();
 
-      if (newFile.isDirectory()) {
-        // One directory
-        newFiles.parseSrcDir(newFile);
-      }
-      else if (newFile.isFile()) {
-        // One file
-        newFiles.addSrcFile(newFile);        
-      }
-      else {
-        System.out.println(usage);
-        System.exit(1);
-      }
-    }
-    // Two parameters calculate all Code Metrics
-    else if (args.length == 2) {
-      oldFile = new File(args[0]);
-      newFile = new File(args[1]);
-      calculateCodeChurn = true;
+        //r.printReport(codeMetrics.newFiles,codeMetrics.calculateCodeChurn);
+        r.writeReport(codeMetrics.newFiles, codeMetrics.calculateCodeChurn);
 
-      if (oldFile.isDirectory() && newFile.isDirectory()) {
-        // Two directories
-      }
-      else if (oldFile.isFile() && newFile.isFile()) {
-        // Two files
-        oldFiles.addSrcFile(oldFile);
-        newFiles.addSrcFile(newFile);
-      }
-      else {
-        System.out.println(usage);
-        System.exit(1);
-      }
     }
-  }
 
-  public void countChurn(final SourceFiles oldFiles, final SourceFiles newFiles) {
-    for (int i = 0; i < newFiles.getNrOfFiles(); i++) {
-      Diff d = new Diff();
-      d.countChurn(oldFiles.getSrcFile(i), newFiles.getSrcFile(i));
-    }
-  }
-  
-  public void countComplexity(final SourceFiles srcFiles) {
-    for (int i = 0; i < srcFiles.getNrOfFiles(); i++) {
-      srcFiles.getSrcFile(i).getMethods();
-      srcFiles.getSrcFile(i).countComplexity();
-    }
-  }
 
-  public void countLines(final SourceFiles srcFiles) {
-    for (int i = 0; i < srcFiles.getNrOfFiles(); i++) {
-      srcFiles.getSrcFile(i).countLines();
+    private void parseCommandLine(final String[] args) {
+        // Check if we have a parameter
+        if (args.length == 0) {
+            System.out.println(usage);
+            System.exit(1);
+        }
+        // One parameter (Run Code Metrics without Code Churn)
+        else if (args.length == 1) {
+            newFile = new File(args[0]);
+
+            if (newFile.isDirectory()) {
+                // One directory
+                newFiles.parseSrcDir(newFile);
+            } else if (newFile.isFile()) {
+                // One file
+                newFiles.addSrcFile(newFile);
+            } else {
+                System.out.println(usage);
+                System.exit(1);
+            }
+        }
+        // Two parameters calculate all Code Metrics
+        else if (args.length == 2) {
+            oldFile = new File(args[0]);
+            newFile = new File(args[1]);
+            calculateCodeChurn = true;
+
+            if (oldFile.isDirectory() && newFile.isDirectory()) {
+                // Two directories
+                newFiles.parseSrcDir(newFile);
+                oldFiles.parseSrcDir(oldFile);
+                newFiles.setPath(newFile.getAbsolutePath());
+                oldFiles.setPath(oldFile.getAbsolutePath());
+            } else if (oldFile.isFile() && newFile.isFile()) {
+                // Two files
+                oldFiles.addSrcFile(oldFile);
+                newFiles.addSrcFile(newFile);
+            } else {
+                System.out.println(usage);
+                System.exit(1);
+            }
+        }
     }
-  }
 }
-
 
 
 //public class XDirDiff {
