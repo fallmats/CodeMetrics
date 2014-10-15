@@ -9,18 +9,27 @@ class fileInfo {
     static final int MAXLINECOUNT = 20000;
     BufferedReader file;    // Reads from a character input stream.
     public int maxLine;     // After input done, Nr lines in file.
+    public int currentLine;
     Node symbol[];          // The symtab handle of each line.
     int other[];            // Map of lineNr to lineNr in other file ( -1 means don't-know ).
     // Allocated AFTER the lines are read.
 
     // Normal constructor with one filename; file is opened and saved.
     fileInfo( String filename ) {
-        symbol = new Node [ MAXLINECOUNT+2 ];
+        symbol = null;
         other  = null;    // allocated later!
         try {
             FileInputStream fStream = new FileInputStream(filename);
             DataInputStream dStream = new DataInputStream(fStream);
             file = new BufferedReader(new InputStreamReader(dStream));
+            FileInputStream flocalStream = new FileInputStream(filename);
+            DataInputStream dlocalStream = new DataInputStream(flocalStream);
+            BufferedReader localFile =  new BufferedReader(new InputStreamReader(dlocalStream));
+            maxLine = 0;
+            while ((localFile.readLine()) != null) {
+                ++maxLine;
+            }
+            alloc();
         } catch (IOException e) {
             System.err.println("Diff can't read file " + filename );
             System.err.println("Error Exception was:" + e );
@@ -30,8 +39,10 @@ class fileInfo {
 
     // This is done late, to be same size as # lines in input file.
     void alloc() {
+        symbol = new Node [ maxLine + 2 ];
         other  = new int[symbol.length + 2];
     }
+
 };
 
 
@@ -68,6 +79,13 @@ public class Diff {
     Diff() {
     }
 
+    public void cleanup() {
+        oldFileInfo.symbol = null;
+        newFileInfo.symbol = null;
+        oldFileInfo.other = null;
+        newFileInfo.other = null;
+    }
+
     public void countChurn(SourceFile oldFile, SourceFile newFile) {
         try {
             if (isEqualFiles(oldFile.getFilePath(), newFile.getFilePath())) {
@@ -84,6 +102,7 @@ public class Diff {
         newFile.setAddedLines(adLOC); // Added Lines of Code
         newFile.setChangedLines(chLOC); // Changed Lines of Code
         newFile.setDeletedLines(dlLOC); // Deleted Lines of Code
+        cleanup();
     }
 
     public Boolean isEqualFiles(String oldFile, String newFile) throws IOException {
@@ -106,20 +125,23 @@ public class Diff {
             System.out.println( ">>>> Difference of file \"" + oldFile + "\" and file \"" + newFile + "\".\n");
         }
 
+        // We need to reset previous node anchor so that we don't look in previously scanned files for a specific line of code
+        Node.panchor = null;
+
         oldFileInfo = new fileInfo(oldFile);
         newFileInfo = new fileInfo(newFile);
+
         // we don't process until we know both files really do exist.
         try {
             inputScan( oldFileInfo );
             inputScan( newFileInfo );
         } catch (IOException e) {
             System.err.println("Read error: " + e);
+            e.printStackTrace();
         }
 
         // Now that we've read all the lines, allocate some arrays.
         blocklen = new int[ (oldFileInfo.maxLine>newFileInfo.maxLine ? oldFileInfo.maxLine : newFileInfo.maxLine) + 2 ];
-        oldFileInfo.alloc();
-        newFileInfo.alloc();
 
         // Now do the work, and print the results.
         transform();
@@ -130,7 +152,7 @@ public class Diff {
     //Sets pinfo.maxLine to the number of lines found.
     void inputScan( fileInfo pinfo ) throws IOException {
         String linebuffer;
-        pinfo.maxLine = 0;
+        pinfo.currentLine = 0;
         while ((linebuffer = pinfo.file.readLine()) != null) {
             storeLine( linebuffer, pinfo );
         }
@@ -141,7 +163,7 @@ public class Diff {
     //Places symbol table handle in pinfo.ymbol.
     //Expects pinfo is either oldinfo or newinfo.
     void storeLine( String linebuffer, fileInfo pinfo ) {
-        int linenum = ++pinfo.maxLine;    // note, no line zero
+        int linenum = ++pinfo.currentLine;    // note, no line zero
         if ( linenum > fileInfo.MAXLINECOUNT ) {
             System.err.println( "MAXLINECOUNT exceeded, must stop." );
             System.exit(1);
@@ -165,10 +187,15 @@ public class Diff {
             newFileInfo.other[newline]= -1;
         }
 
-        scanUnique();  // scan for lines used once in both files
-        scanAfter();   // scan past sure-matches for non-unique blocks
-        scanBefore();  // scan backwards from sure-matches
-        scanBlocks();  // find the fronts and lengths of blocks
+        // Lets try to scan the files. This has proven to be a error probe area of the code so beware ;)
+        try {
+            scanUnique();  // scan for lines used once in both files
+            scanAfter();   // scan past sure-matches for non-unique blocks
+            scanBefore();  // scan backwards from sure-matches
+            scanBlocks();  // find the fronts and lengths of blocks
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     //Scans for lines which are used exactly once in each file.
@@ -189,8 +216,10 @@ public class Diff {
         }
         newFileInfo.other[ 0 ] = 0;
         oldFileInfo.other[ 0 ] = 0;
-        newFileInfo.other[ newFileInfo.maxLine + 1 ] = oldFileInfo.maxLine + 1;
-        oldFileInfo.other[ oldFileInfo.maxLine + 1 ] = newFileInfo.maxLine + 1;
+
+        // I guess we should initialize new rows to -1 and not to any line number?
+        newFileInfo.other[ newFileInfo.maxLine + 1 ] = -1; //oldFileInfo.maxLine + 1;
+        oldFileInfo.other[ oldFileInfo.maxLine + 1 ] = -1; //newFileInfo.maxLine + 1;
     }
 
     //Expects both files in symtab, and oldinfo and newinfo valid.
@@ -349,7 +378,7 @@ public class Diff {
         if ( diffStatus != deleted ) {
             //System.out.println( ">>>> DELETE AT " + currentLineOldFile);
             if (debug) {
-                System.out.println("DELETED");
+                System.out.println("DELETED "+currentLineNewFile);
             }
         }
         diffStatus = deleted;
@@ -363,13 +392,13 @@ public class Diff {
     void countInsert() {
         if ( diffStatus == changed ) {
             if (debug) {
-                System.out.println("CHANGED");
+                System.out.println("CHANGED "+ currentLineNewFile);
             }
             churnStatus = changed;
         }
         else if ( diffStatus != added ) {
             if (debug) {
-                System.out.println("ADDED");
+                System.out.println("ADDED "+currentLineNewFile);
             }
             churnStatus = added;
         }
@@ -411,7 +440,7 @@ public class Diff {
     void countMove() {
         int oldblock = blocklen[ currentLineOldFile ];
         int newother = newFileInfo.other[ currentLineNewFile ];
-        int newblock = blocklen[ newother ];
+        int newblock = blocklen[ newother ];  // Here we used to have some error's with out of index! beware
 
         if ( newblock < 0 ) skipNewBlock(); // already printed.
         else if ( oldblock >= newblock ) {  // assume new's blk moved.

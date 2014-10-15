@@ -26,6 +26,8 @@ public class Reporting {
                 out.write("Changed Lines of Code;");
                 out.write("Deleted Lines of Code;");
                 out.write("Code Churn;");
+                out.write("Equal;");
+                out.write("New file;");
             }
             out.write(System.getProperty("line.separator"));
 

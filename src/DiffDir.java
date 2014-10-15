@@ -98,7 +98,14 @@ public class DiffDir {
                 Diff diffFile = new Diff();
                 //TODO: Do the codeChurn here
                 SourceFile currentOldFile = new SourceFile(toFind.getName(), toFind.getAbsolutePath());;
-                diffFile.countChurn(currentOldFile, newFile.getSrcFile(i));
+                try {
+                    diffFile.countChurn(currentOldFile, newFile.getSrcFile(i));
+                } catch (Exception e) {
+                    System.out.println("Found error when calculating Code Churn for file: " + newFile.getSrcFile(i).getFileName());
+                    //System.out.println(e);
+                    e.printStackTrace();
+
+                }
 
             } else {
                 newFile.getSrcFile(i).setNew(true);
