@@ -8,6 +8,9 @@
 
 import java.io.File;
 
+import se.prolore.fileparsing.SourceFiles;
+import se.prolore.graphics.XYPlotCodeChurn;
+
 
 public class CodeMetrics {
     private boolean calculateCodeChurn = false;
@@ -38,13 +41,6 @@ public class CodeMetrics {
 
         codeMetrics.parseCommandLine(args);
 
-        // Calculate Code Churn
-        if (codeMetrics.calculateCodeChurn) {
-            DiffDir d = new DiffDir();
-            d.diffDirsAndCountCodeChurn(codeMetrics.oldFiles, codeMetrics.newFiles);
-
-        }
-
         // Calculate Cyclomatic Complexity
         System.out.println("complex");
         codeMetrics.newFiles.countComplexity();
@@ -52,10 +48,32 @@ public class CodeMetrics {
         // Count LOC (Lines of Code)
         codeMetrics.newFiles.countLines();
 
+        // Calculate Code Churn
+        if (codeMetrics.calculateCodeChurn) {
+            DiffDir d = new DiffDir();
+            System.out.println("diff");
+            d.diffDirsAndCountCodeChurn(codeMetrics.oldFiles, codeMetrics.newFiles);
+            System.out.println("graph");
+            XYPlotCodeChurn demo = new XYPlotCodeChurn("Code churn vs avg complexity");
+            for (int i = 0; i < codeMetrics.newFiles.getNrOfFiles(); i++) {
+                if (!codeMetrics.newFiles.getSrcFile(i).isEqual()) {
+                    if (codeMetrics.newFiles.getSrcFile(i).getCodeChurn()>20) {
+                        demo.addFileMeasurement(codeMetrics.newFiles.getSrcFile(i).getAvgComplexity(), codeMetrics.newFiles.getSrcFile(i).getLinesOfStatements(), codeMetrics.newFiles.getSrcFile(i).getCodeChurn(), codeMetrics.newFiles.getSrcFile(i).getFileName());
+                    }
+                }
+            }
+            demo.saveGraph();
+
+            //demo.showGraph();
+        }
+
         Reporting r = new Reporting();
 
-        //r.printReport(codeMetrics.newFiles,codeMetrics.calculateCodeChurn);
-        r.writeReport(codeMetrics.newFiles, codeMetrics.calculateCodeChurn);
+//        r.printReport(codeMetrics.newFiles,codeMetrics.calculateCodeChurn); //to System.out
+        r.printOverallStatistics(codeMetrics.newFiles,codeMetrics.calculateCodeChurn); //aggregated statistics to System.out
+        r.writeReport(codeMetrics.newFiles, codeMetrics.calculateCodeChurn); //to File
+        r.writeAggregatedReport(codeMetrics.newFiles, codeMetrics.calculateCodeChurn); //to File
+
 
     }
 

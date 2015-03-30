@@ -1,16 +1,60 @@
+import se.prolore.fileparsing.SourceFiles;
+
 import java.io.BufferedWriter;
 import java.io.FileWriter;
+import java.text.DecimalFormat;
+import java.text.NumberFormat;
+import java.util.Locale;
 
 /**
  * Created by matseriksson on 25/09/14.
  */
 public class Reporting {
 
-    public void writeReport(SourceFiles newFiles, boolean includeCodeChurn) {
+    public void writeAggregatedReport(SourceFiles newFiles, boolean includeCodeChurn) {
         BufferedWriter out = null;
         try {
-            FileWriter fstream = new FileWriter("out.csv");
+            FileWriter fstream = new FileWriter("aggregated.csv");
             out = new BufferedWriter(fstream);
+
+            out.write("Total (Aggregated Metrics)");
+            out.write(System.getProperty("line.separator")+"Total Lines of Code;" + newFiles.getLinesOfCode());
+            out.write(System.getProperty("line.separator")+"Executable Lines;" + newFiles.getLinesOfStatements());
+            out.write(System.getProperty("line.separator")+"Lines of Comments;" + newFiles.getLinesOfComments());
+            out.write(System.getProperty("line.separator")+"Trivial Lines;" + newFiles.getTrivialLines());
+            out.write(System.getProperty("line.separator")+"Empty Lines;" + newFiles.getEmptyLines());
+            out.write(System.getProperty("line.separator")+"Code Complexity;" + newFiles.getComplexity());
+            out.write(System.getProperty("line.separator")+"Number of Files;" + newFiles.getNrOfFiles());
+            out.write(System.getProperty("line.separator")+"Average File Complexity;" + newFiles.getAvgComplexity());
+            out.write(System.getProperty("line.separator")+"Comment Percentage;" + (100 * newFiles.getLinesOfComments()) / newFiles.getLinesOfCode() + "%");
+            // Recommendations: Code where the percentage of comment is lower than 20% should be more commented.
+            // However overly commented code (>40%) is more difficult to read.
+            if (includeCodeChurn) {
+                out.write(System.getProperty("line.separator")+"Added Lines of Code;" + newFiles.getAddedLines());
+                out.write(System.getProperty("line.separator")+"Changed Lines of Code;" + newFiles.getChangedLines());
+                out.write(System.getProperty("line.separator")+"Deleted Lines of Code;" + newFiles.getDeletedLines());
+                out.write(System.getProperty("line.separator")+"Code Churn;" + newFiles.getCodeChurn());
+            }
+            //Close the output stream
+            out.close();
+        }
+        catch (Exception e) {
+            System.err.println("Error: " + e.getMessage());
+            return;
+        }
+    }
+
+
+    public void writeReport(SourceFiles newFiles, boolean includeCodeChurn) {
+        writeReport(newFiles,includeCodeChurn,"out.csv");
+    }
+
+    public void writeReport(SourceFiles newFiles, boolean includeCodeChurn, String fileName) {
+        BufferedWriter out = null;
+        try {
+            FileWriter fstream = new FileWriter(fileName );
+            out = new BufferedWriter(fstream);
+            out.write("File Path;");
             out.write("File Name;");
             out.write("Total Lines of Code;");
             out.write("Executable Lines;");
@@ -33,6 +77,7 @@ public class Reporting {
 
             for (int i = 0; i < newFiles.getNrOfFiles(); i++) {
                 out.write(newFiles.getSrcFile(i).getFilePath() + ";");
+                out.write(newFiles.getSrcFile(i).getFileName() + ";");
                 out.write(String.valueOf(newFiles.getSrcFile(i).getLinesOfCode()) + ";");
                 out.write(String.valueOf(newFiles.getSrcFile(i).getLinesOfStatements()) + ";");
                 out.write(String.valueOf(newFiles.getSrcFile(i).getLinesOfComments()) + ";");
@@ -40,7 +85,15 @@ public class Reporting {
                 out.write(String.valueOf(newFiles.getSrcFile(i).getEmptyLines()) + ";");
                 out.write(String.valueOf(newFiles.getSrcFile(i).getCCInt()) + ";");
                 out.write(String.valueOf(newFiles.getSrcFile(i).getNrOfMethods()) + ";");
-                out.write(String.valueOf(newFiles.getSrcFile(i).getAvgComplexity()) + ";");
+
+                // needed to output the float with a , instead of . for Numbers on my Mac
+                NumberFormat nf = NumberFormat.getNumberInstance(Locale.GERMAN);
+                DecimalFormat df = (DecimalFormat)nf;
+                String output = df.format(newFiles.getSrcFile(i).getAvgComplexity());
+                out.write(output + ";");
+                //out.write(String.valueOf(newFiles.getSrcFile(i).getAvgComplexity()) + ";");
+
+
                 out.write(String.valueOf((100 * newFiles.getSrcFile(i).getLinesOfComments()) / newFiles.getSrcFile(i).getLinesOfCode() + "%") + ";");
                 if (includeCodeChurn) {
                     out.write(String.valueOf(newFiles.getSrcFile(i).getAddedLines()) + ";");
@@ -61,6 +114,8 @@ public class Reporting {
             return;
         }
     }
+
+
 
     public void printReport(SourceFiles newFiles, boolean includeCodeChurn) {
         for (int i = 0; i < newFiles.getNrOfFiles(); i++) {
@@ -90,8 +145,11 @@ public class Reporting {
                 System.out.println("\t Code Churn:                " + newFiles.getSrcFile(i).getCodeChurn());
 
             }
-
         }
+    }
+
+    public void printOverallStatistics(SourceFiles newFiles, boolean includeCodeChurn) {
+
         System.out.println("Total (Aggregated Metrics)");
         System.out.println("\t Total Lines of Code:     " + newFiles.getLinesOfCode());
         System.out.println("\t Executable Lines:        " + newFiles.getLinesOfStatements());
